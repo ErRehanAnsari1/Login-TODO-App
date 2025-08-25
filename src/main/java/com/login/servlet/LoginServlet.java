@@ -8,51 +8,49 @@ import java.sql.SQLException;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.*;
 
 @WebServlet("/LoginServlet")
 public class LoginServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+
         String uname = req.getParameter("username");
         String pass = req.getParameter("password");
 
-        Connection con = null;
-        PreparedStatement ps = null;
-        ResultSet rs = null;
+        if (uname == null || pass == null) {
+            req.setAttribute("errorMsg", "Username/Password required");
+            req.getRequestDispatcher("error.jsp").forward(req, resp);
+            return;
+        }
 
-        try {
-            con = DBConnection.getConnection(); // taking connection of our db
-            String query = "select * from users where username=? and password=?";
-            ps = con.prepareStatement(query);
-            ps.setString(1, uname);
-            ps.setString(2, pass);
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con.prepareStatement(
+                     "SELECT * FROM users WHERE username=? AND password=?")) {
 
-            rs = ps.executeQuery();
+            ps.setString(1, uname.trim());
+            ps.setString(2, pass.trim());
 
-            if (rs.next()) {
-                // Save username in request scope
-                req.setAttribute("username", uname);
-                // Forwarding to welcome.jsp
-                req.getRequestDispatcher("welcome.jsp").forward(req, resp);
-            } else {
-                // Forwarding to error.jsp
-                req.getRequestDispatcher("error.jsp").forward(req, resp);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    HttpSession session = req.getSession();
+                    session.setAttribute("username", uname);
+                    resp.sendRedirect("TodosServlet");
+                } else {
+                    req.setAttribute("errorMsg", "Invalid Username or Password!");
+                    req.getRequestDispatcher("error.jsp").forward(req, resp);
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
             req.setAttribute("errorMsg", "Database Error!");
             req.getRequestDispatcher("error.jsp").forward(req, resp);
-        } finally {
-            try {
-                if (rs != null) rs.close();
-                if (ps != null) ps.close();
-                if (con != null) con.close();
-            } catch (Exception e) {}
         }
     }
 }
+
+
+
